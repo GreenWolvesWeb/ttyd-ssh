@@ -1,55 +1,13 @@
 services:
   ttyd:
-    build:
-      dockerfile_inline: |
-        FROM tsl0922/ttyd:alpine
-        RUN apk add --no-cache openssh-client-default bash less nano \
-         && adduser -D -s /bin/bash dev
+    build: .
     image: ttyd-ssh:latest
-    container_name: ttyd-ssh
     restart: unless-stopped
-    mem_limit: 64m       # ~20 MB idle, +1-2 MB per terminal session
+    mem_limit: 64m   # local runs only; on Miget the limit comes from compose.miget.yaml
     environment:
-      # user:password for the web login - required, this is exposed to the internet
-      TTYD_CREDENTIAL: ${TTYD_CREDENTIAL:?set TTYD_CREDENTIAL=user:password in .env}
-    entrypoint: ["/sbin/tini", "--", "sh", "-ec"]
-    # Startup script. Note: $$ is a literal $ (compose would interpolate a single $)
-    command:
-      - |
-        # Copy mounted SSH keys/config into place with the permissions ssh requires
-        # (bind mounts from Windows show up as 0777, which ssh refuses for private keys)
-        mkdir -p /home/dev/.ssh
-        if [ -d /ssh-keys ]; then cp -r /ssh-keys/. /home/dev/.ssh/; fi
-        chown -R dev:dev /home/dev/.ssh
-        chmod 700 /home/dev/.ssh
-        find /home/dev/.ssh -type f -exec chmod 600 {} +
-        find /home/dev/.ssh -type f -name '*.pub' -exec chmod 644 {} +
-
-        # Web terminal runs as the unprivileged 'dev' user
-        exec ttyd -W -c "$$TTYD_CREDENTIAL" su - dev
-    expose:
-      - "7681"   # only reachable through caddy, not published on the host
-    volumes:
-      # Private keys, config and known_hosts to use for outgoing ssh (read-only)
-      - ${SSH_KEYS_DIR:-./ssh}:/ssh-keys:ro
-
-  caddy:
-    image: caddy:2
-    container_name: ttyd-caddy
-    restart: unless-stopped
-    mem_limit: 64m       # ~15 MB idle; headroom for certificate issuance
-    # Automatic HTTPS (Let's Encrypt), HTTP->HTTPS redirect, websocket proxying
-    command: caddy reverse-proxy --from ${DOMAIN:?set DOMAIN in .env} --to ttyd:7681
+      TTYD_USERNAME: ${TTYD_USERNAME:-dev}
+      TTYD_PASSWORD: ${TTYD_PASSWORD}       # required; Miget asks for it at deploy
+      SSH_PRIVATE_KEY: ${SSH_PRIVATE_KEY}   # PEM text or base64 of it
+      SSH_KNOWN_HOSTS: ${SSH_KNOWN_HOSTS:-} # optional
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"   # HTTP/3
-    volumes:
-      - caddy_data:/data       # certificates - keep to avoid Let's Encrypt rate limits
-      - caddy_config:/config
-    depends_on:
-      - ttyd
-
-volumes:
-  caddy_data:
-  caddy_config:
+      - "5000:5000"

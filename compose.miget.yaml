@@ -1,0 +1,5 @@
+# Layered onto docker-compose.yml by Miget at deploy time; plain docker compose ignores it
+services:
+  ttyd:                 # the public entry - listens on port 5000
+    x-miget:
+      ram: "128Mi"      # uses ~20 MB idle, +1-2 MB per terminal session
