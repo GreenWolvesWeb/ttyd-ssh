@@ -1,0 +1,56 @@
+services:
+  ttyd:
+    build:
+      dockerfile_inline: |
+        FROM tsl0922/ttyd:latest
+        RUN apt-get update \
+         && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+              openssh-client ca-certificates less nano iputils-ping \
+         && rm -rf /var/lib/apt/lists/* \
+         && useradd -m -s /bin/bash dev
+    image: ttyd-ssh:latest
+    container_name: ttyd-ssh
+    restart: unless-stopped
+    environment:
+      # user:password for the web login - required, this is exposed to the internet
+      TTYD_CREDENTIAL: ${TTYD_CREDENTIAL:?set TTYD_CREDENTIAL=user:password in .env}
+    entrypoint: ["/usr/bin/tini", "--", "sh", "-ec"]
+    # Startup script. Note: $$ is a literal $ (compose would interpolate a single $)
+    command:
+      - |
+        # Copy mounted SSH keys/config into place with the permissions ssh requires
+        # (bind mounts from Windows show up as 0777, which ssh refuses for private keys)
+        mkdir -p /home/dev/.ssh
+        if [ -d /ssh-keys ]; then cp -r /ssh-keys/. /home/dev/.ssh/; fi
+        chown -R dev:dev /home/dev/.ssh
+        chmod 700 /home/dev/.ssh
+        find /home/dev/.ssh -type f -exec chmod 600 {} +
+        find /home/dev/.ssh -type f -name '*.pub' -exec chmod 644 {} +
+
+        # Web terminal runs as the unprivileged 'dev' user
+        exec ttyd -W -c "$$TTYD_CREDENTIAL" su - dev
+    expose:
+      - "7681"   # only reachable through caddy, not published on the host
+    volumes:
+      # Private keys, config and known_hosts to use for outgoing ssh (read-only)
+      - ${SSH_KEYS_DIR:-./ssh}:/ssh-keys:ro
+
+  caddy:
+    image: caddy:2
+    container_name: ttyd-caddy
+    restart: unless-stopped
+    # Automatic HTTPS (Let's Encrypt), HTTP->HTTPS redirect, websocket proxying
+    command: caddy reverse-proxy --from ${DOMAIN:?set DOMAIN in .env} --to ttyd:7681
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - caddy_data:/data       # certificates - keep to avoid Let's Encrypt rate limits
+      - caddy_config:/config
+    depends_on:
+      - ttyd
+
+volumes:
+  caddy_data:
+  caddy_config:
