@@ -2,19 +2,17 @@ services:
   ttyd:
     build:
       dockerfile_inline: |
-        FROM tsl0922/ttyd:latest
-        RUN apt-get update \
-         && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-              openssh-client ca-certificates less nano iputils-ping \
-         && rm -rf /var/lib/apt/lists/* \
-         && useradd -m -s /bin/bash dev
+        FROM tsl0922/ttyd:alpine
+        RUN apk add --no-cache openssh-client-default bash less nano \
+         && adduser -D -s /bin/bash dev
     image: ttyd-ssh:latest
     container_name: ttyd-ssh
     restart: unless-stopped
+    mem_limit: 64m       # ~20 MB idle, +1-2 MB per terminal session
     environment:
       # user:password for the web login - required, this is exposed to the internet
       TTYD_CREDENTIAL: ${TTYD_CREDENTIAL:?set TTYD_CREDENTIAL=user:password in .env}
-    entrypoint: ["/usr/bin/tini", "--", "sh", "-ec"]
+    entrypoint: ["/sbin/tini", "--", "sh", "-ec"]
     # Startup script. Note: $$ is a literal $ (compose would interpolate a single $)
     command:
       - |
@@ -39,6 +37,7 @@ services:
     image: caddy:2
     container_name: ttyd-caddy
     restart: unless-stopped
+    mem_limit: 64m       # ~15 MB idle; headroom for certificate issuance
     # Automatic HTTPS (Let's Encrypt), HTTP->HTTPS redirect, websocket proxying
     command: caddy reverse-proxy --from ${DOMAIN:?set DOMAIN in .env} --to ttyd:7681
     ports:
