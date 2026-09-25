@@ -1,6 +1,5 @@
 #!/bin/sh
 set -e
-: "${TTYD_PASSWORD:?TTYD_PASSWORD is required}"
 
 SSH_DIR=/home/dev/.ssh
 mkdir -p "$SSH_DIR"
@@ -33,7 +32,5 @@ fi
 chown -R dev:dev "$SSH_DIR"
 chmod 700 "$SSH_DIR"
 
-# Web terminal runs as the unprivileged 'dev' user; Miget sets PORT=5000
-exec ttyd -p "${PORT:-5000}" -W \
-  -c "${TTYD_USERNAME:-dev}:${TTYD_PASSWORD}" \
-  su - dev
+# Login is checked by Miget's Basic Auth (ttyd -c breaks the WebSocket behind Miget's proxy)
+exec ttyd -p "${PORT:-5000}" -W su - dev
