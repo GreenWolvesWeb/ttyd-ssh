@@ -5,8 +5,6 @@ services:
     restart: unless-stopped
     mem_limit: 64m   # local runs only; on Miget the limit comes from compose.miget.yaml
     environment:
-      TTYD_USERNAME: ${TTYD_USERNAME:-dev}
-      TTYD_PASSWORD: ${TTYD_PASSWORD}       # required; Miget asks for it at deploy
       SSH_PRIVATE_KEY: ${SSH_PRIVATE_KEY}   # PEM text or base64 of it
       SSH_KNOWN_HOSTS: ${SSH_KNOWN_HOSTS:-} # optional
     ports:
